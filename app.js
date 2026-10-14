@@ -10,9 +10,8 @@ const STORAGE_KEYS = {
 
 const PROVIDER_MODELS = {
   groq: [
-    { value: "llama-3.3-70b-specdec", label: "Llama 3.3 70B SpecDec (Recommended)" },
-    { value: "llama3-70b-8192", label: "Llama 3 70B (Fast Backup)" },
-    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" }
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Recommended)" },
+    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant (Ultra Fast)" }
   ],
   gemini: [
     { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
@@ -20,18 +19,18 @@ const PROVIDER_MODELS = {
   ]
 };
 
-// FORCE MIGRATION: Clear broken legacy models directly from browser storage
+// Clear deprecated model IDs from browser storage instantly
 (function forceStorageCleanup() {
   const currentSavedModel = localStorage.getItem(STORAGE_KEYS.MODEL);
-  if (!currentSavedModel || currentSavedModel === "llama-3.3-70b-versatile" || currentSavedModel === "gemini-3.8-flash") {
-    localStorage.setItem(STORAGE_KEYS.MODEL, "llama-3.3-70b-specdec");
+  if (!currentSavedModel || currentSavedModel.includes("specdec") || currentSavedModel.includes("3.8")) {
+    localStorage.setItem(STORAGE_KEYS.MODEL, "llama-3.3-70b-versatile");
   }
 })();
 
 const state = {
   provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "groq",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "llama-3.3-70b-specdec",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "llama-3.3-70b-versatile",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false
