@@ -10,21 +10,19 @@ const STORAGE_KEYS = {
 
 const PROVIDER_MODELS = {
   gemini: [
-    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / Ultra Stable)" },
-    { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
-    { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended)" },
+    { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" }
   ],
   groq: [
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Fast Free Backup)" },
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Fast & Free)" },
     { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" }
   ]
 };
 
 const state = {
-  provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "gemini",
+  provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "groq",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  // Enforce gemini-1.5-flash as default to prevent 10-hour model locks
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-1.5-flash",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "llama-3.3-70b-versatile",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false,
@@ -35,12 +33,6 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Always migrate away from locked gemini-3.8-flash on load
-  if (state.model === "gemini-3.8-flash") {
-    state.model = "gemini-1.5-flash";
-    localStorage.setItem(STORAGE_KEYS.MODEL, "gemini-1.5-flash");
-  }
-
   initUI();
   setupEventListeners();
   loadCurrentSession();
@@ -58,7 +50,7 @@ function initUI() {
 function populateModels(provider) {
   const select = $("modelSelect");
   select.replaceChildren();
-  const models = PROVIDER_MODELS[provider] || PROVIDER_MODELS.gemini;
+  const models = PROVIDER_MODELS[provider] || PROVIDER_MODELS.groq;
   models.forEach(m => {
     const opt = document.createElement("option");
     opt.value = m.value;
@@ -140,12 +132,6 @@ function setupEventListeners() {
     if (e.target === $("settingsModal")) closeSettings();
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !$("settingsModal").hidden) {
-      closeSettings();
-    }
-  });
-
   $("providerSelect").addEventListener("change", (e) => {
     const selectedProvider = e.target.value;
     populateModels(selectedProvider);
@@ -182,57 +168,6 @@ function setupEventListeners() {
       return;
     }
 
-    msg.style.color = "#83e3b4";
-    msg.textContent = "Saving connection...";
-
-    try {
-      if (provider === "gemini") {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: "Ping" }] }] })
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const rawMessage = errData.error?.message || "";
-          if (res.status === 503 || res.status === 429 || rawMessage.includes("quota")) {
-            saveStateAndClose(provider, key, model, "Key saved! (Recommendation: Use Gemini 1.5 Flash)");
-            return;
-          }
-          if (res.status === 400 || res.status === 401 || res.status === 403) {
-            throw new Error("Invalid API key.");
-          }
-        }
-      } else if (provider === "groq") {
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [{ role: "user", content: "Ping" }],
-            max_tokens: 5
-          })
-        });
-
-        if (!res.ok) {
-          if (res.status === 401 || res.status === 403) {
-            throw new Error("Invalid Groq API key.");
-          }
-        }
-      }
-
-      saveStateAndClose(provider, key, model, "Successfully connected!");
-    } catch (err) {
-      msg.style.color = "#ffaaa5";
-      msg.textContent = `Connection error: ${err.message}`;
-    }
-  });
-
-  function saveStateAndClose(provider, key, model, messageText) {
     state.provider = provider;
     state.apiKey = key;
     state.model = model;
@@ -241,15 +176,15 @@ function setupEventListeners() {
     localStorage.setItem(STORAGE_KEYS.MODEL, model);
 
     updateConnectionStatus();
-    const msg = $("settingsMessage");
     msg.style.color = "#83e3b4";
-    msg.textContent = messageText;
+    msg.textContent = "Successfully connected!";
+    
     setTimeout(() => {
       $("settingsModal").hidden = true;
       $("settingsModal").style.display = "none";
       msg.textContent = "";
-    }, 1200);
-  }
+    }, 1000);
+  });
 
   $("disconnectKey").addEventListener("click", () => {
     state.apiKey = "";
@@ -262,9 +197,6 @@ function setupEventListeners() {
 
   $("newChat").addEventListener("click", () => {
     createNewSession();
-    if (window.innerWidth <= 760) {
-      sidebar.classList.remove("open");
-    }
   });
 
   document.querySelectorAll(".suggestion").forEach((btn) => {
@@ -278,41 +210,7 @@ function setupEventListeners() {
     });
   });
 
-  const imageInput = $("imageInput");
-  $("attachButton").addEventListener("click", () => {
-    if (state.busy) return;
-    imageInput.click();
-  });
-
-  imageInput.addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await handleImageFile(file);
-    imageInput.value = "";
-  });
-
   const promptInput = $("promptInput");
-  promptInput.addEventListener("paste", async (event) => {
-    if (state.busy) return;
-
-    const clipboardItems = Array.from(event.clipboardData?.items || []);
-    const imageItem = clipboardItems.find(item =>
-      item.kind === "file" && item.type.startsWith("image/")
-    );
-
-    if (!imageItem) return;
-
-    event.preventDefault();
-
-    const file = imageItem.getAsFile();
-    if (!file) {
-      showToastError("Could not read copied image.");
-      return;
-    }
-
-    await handleImageFile(file);
-  });
-
   promptInput.addEventListener("input", adjustTextareaRows);
   promptInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -323,15 +221,10 @@ function setupEventListeners() {
 
   $("chatForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (state.busy) {
-      if (state.activeController) {
-        state.activeController.abort();
-      }
-      return;
-    }
+    if (state.busy) return;
 
     const text = promptInput.value.trim();
-    if (!text && !state.image) return;
+    if (!text) return;
 
     if (!state.apiKey) {
       showToastError("Please connect your API key in settings first.");
@@ -339,14 +232,10 @@ function setupEventListeners() {
       return;
     }
 
-    const currentMessageText = text;
-    const currentImageObj = state.image;
-
     promptInput.value = "";
     adjustTextareaRows();
-    clearImage();
 
-    await submitUserMessage(currentMessageText, currentImageObj);
+    await submitUserMessage(text);
   });
 }
 
@@ -354,71 +243,6 @@ function adjustTextareaRows() {
   const textarea = $("promptInput");
   textarea.style.height = "auto";
   textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
-}
-
-async function handleImageFile(file) {
-  if (file.size > 12 * 1024 * 1024) {
-    showToastError("Image must be smaller than 12 MB.");
-    return;
-  }
-
-  try {
-    const dataUrl = await fileToDataURL(file);
-    state.image = {
-      name: file.name || `pasted-image-${Date.now()}.png`,
-      mimeType: file.type || "image/png",
-      data: dataUrl.split(",")[1],
-      preview: dataUrl
-    };
-    renderImagePreview();
-  } catch (error) {
-    showToastError("Could not load image.");
-  }
-}
-
-function fileToDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function renderImagePreview() {
-  const preview = $("attachmentPreview");
-  if (!state.image) {
-    preview.hidden = true;
-    preview.replaceChildren();
-    return;
-  }
-
-  preview.replaceChildren();
-
-  const img = document.createElement("img");
-  img.src = state.image.preview;
-  img.alt = "Attachment preview";
-
-  const label = document.createElement("span");
-  label.textContent = state.image.name;
-
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.textContent = "×";
-  removeBtn.setAttribute("aria-label", "Remove image");
-  removeBtn.addEventListener("click", clearImage);
-
-  preview.append(img, label, removeBtn);
-  preview.hidden = false;
-}
-
-function clearImage() {
-  state.image = null;
-  const preview = $("attachmentPreview");
-  preview.hidden = true;
-  preview.replaceChildren();
-  const imageInput = $("imageInput");
-  if (imageInput) imageInput.value = "";
 }
 
 function createNewSession() {
@@ -468,15 +292,11 @@ function renderHistoryList() {
       saveSessionsToStorage();
       renderHistoryList();
       loadCurrentSession();
-      if (window.innerWidth <= 760) {
-        $("sidebar").classList.remove("open");
-      }
     });
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "history-delete";
     deleteBtn.textContent = "×";
-    deleteBtn.setAttribute("aria-label", "Delete conversation");
     deleteBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       deleteSession(session.id);
@@ -511,7 +331,7 @@ function loadCurrentSession() {
     welcomeEl.classList.add("hidden");
     titleEl.textContent = session.title;
     session.messages.forEach(msg => {
-      appendMessageToDOM(msg.role, msg.text, msg.imagePreview, false);
+      appendMessageToDOM(msg.role, msg.text, false);
     });
   } else {
     welcomeEl.classList.remove("hidden");
@@ -520,20 +340,13 @@ function loadCurrentSession() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// SILENT AUTOMATIC FALLBACK ENGINE
-async function submitUserMessage(text, imageObj) {
+async function submitUserMessage(text) {
   const session = getCurrentSession();
   if (session.messages.length === 0) {
     session.title = text.length > 30 ? text.substring(0, 30) + "..." : text;
   }
 
-  const userMsg = {
-    role: "user",
-    text: text,
-    imagePreview: imageObj ? imageObj.preview : null,
-    imagePayload: imageObj ? { mimeType: imageObj.mimeType, data: imageObj.data } : null
-  };
-
+  const userMsg = { role: "user", text: text };
   session.messages.push(userMsg);
   saveSessionsToStorage();
   renderHistoryList();
@@ -541,133 +354,78 @@ async function submitUserMessage(text, imageObj) {
   $("welcome").classList.add("hidden");
   $("currentChatTitle").textContent = session.title;
 
-  appendMessageToDOM("user", userMsg.text, userMsg.imagePreview, true);
+  appendMessageToDOM("user", userMsg.text, true);
 
   setBusyState(true);
   const assistantMsgId = `msg_${Date.now()}`;
-  const assistantMsgContentEl = appendMessageToDOM("assistant", "Thinking...", null, true, assistantMsgId);
-
-  state.activeController = new AbortController();
+  const assistantMsgContentEl = appendMessageToDOM("assistant", "Thinking...", true, assistantMsgId);
 
   try {
     let replyText = "";
 
     if (state.provider === "groq") {
-      const groqMessages = session.messages.map(m => ({
+      // Clean structure specifically for Groq API
+      const groqFormattedMessages = session.messages.map(m => ({
         role: m.role === "assistant" ? "assistant" : "user",
-        content: m.text
+        content: m.text || ""
       }));
 
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${state.apiKey}`
+          "Authorization": `Bearer ${state.apiKey.trim()}`
         },
         body: JSON.stringify({
           model: state.model,
-          messages: groqMessages
-        }),
-        signal: state.activeController.signal
+          messages: groqFormattedMessages
+        })
       });
 
       if (!res.ok) {
-        throw new Error("Groq API error. Check your Groq API key.");
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `Groq API connection error (${res.status})`);
       }
 
       const data = await res.json();
       replyText = data.choices?.[0]?.message?.content || "No response received.";
     } else {
-      // SILENT FALLBACK QUEUE FOR GEMINI
-      const modelQueue = [...new Set([state.model, "gemini-1.5-flash", "gemini-3.6-flash"])];
-      let success = false;
+      // Gemini Format
+      const geminiContents = session.messages.map(m => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.text || "" }]
+      }));
 
-      for (const modelCandidate of modelQueue) {
-        try {
-          const apiContents = buildGeminiApiPayload(session);
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelCandidate}:generateContent?key=${state.apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: apiContents }),
-            signal: state.activeController.signal
-          });
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey.trim()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: geminiContents })
+      });
 
-          if (res.ok) {
-            const data = await res.json();
-            const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (textResult) {
-              replyText = textResult;
-              success = true;
-
-              // If fallback was used, update app state silently so status pill updates
-              if (modelCandidate !== state.model) {
-                state.model = modelCandidate;
-                localStorage.setItem(STORAGE_KEYS.MODEL, modelCandidate);
-                updateConnectionStatus();
-              }
-              break;
-            }
-          }
-        } catch (err) {
-          if (err.name === "AbortError") throw err; // User clicked stop
-        }
+      if (!res.ok) {
+        throw new Error("Gemini API connection error. Check key or model quota.");
       }
 
-      if (!success) {
-        throw new Error("Unable to connect to Gemini. Please check your API key in settings.");
-      }
+      const data = await res.json();
+      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
     }
 
     assistantMsgContentEl.textContent = replyText;
     assistantMsgContentEl.classList.remove("typing");
 
-    session.messages.push({
-      role: "assistant",
-      text: replyText,
-      imagePreview: null,
-      imagePayload: null
-    });
+    session.messages.push({ role: "assistant", text: replyText });
     saveSessionsToStorage();
 
   } catch (err) {
     const assistantMessageBlock = document.getElementById(assistantMsgId);
-    if (assistantMessageBlock) {
-      assistantMessageBlock.remove();
-    }
+    if (assistantMessageBlock) assistantMessageBlock.remove();
 
-    let errorText = err.message;
-    if (err.name === "AbortError") {
-      errorText = "Generation cancelled.";
-    }
-
-    showToastError(errorText);
+    showToastError(err.message);
   } finally {
     setBusyState(false);
-    state.activeController = null;
     const messagesContainer = $("messages");
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
-}
-
-function buildGeminiApiPayload(session) {
-  return session.messages.map(m => {
-    const parts = [];
-    if (m.text) {
-      parts.push({ text: m.text });
-    }
-    if (m.imagePayload) {
-      parts.push({
-        inlineData: {
-          mimeType: m.imagePayload.mimeType,
-          data: m.imagePayload.data
-        }
-      });
-    }
-    return {
-      role: m.role === "assistant" ? "model" : "user",
-      parts: parts
-    };
-  });
 }
 
 function setBusyState(busy) {
@@ -677,15 +435,13 @@ function setBusyState(busy) {
   if (busy) {
     sendBtn.classList.add("stop-btn");
     sendIcon.textContent = "■";
-    sendBtn.setAttribute("title", "Stop generation");
   } else {
     sendBtn.classList.remove("stop-btn");
     sendIcon.textContent = "↑";
-    sendBtn.setAttribute("title", "Send message");
   }
 }
 
-function appendMessageToDOM(role, text, imagePreview, scrollToBottom = true, customId = null) {
+function appendMessageToDOM(role, text, scrollToBottom = true, customId = null) {
   const messagesContainer = $("messages");
 
   const messageDiv = document.createElement("div");
@@ -698,14 +454,6 @@ function appendMessageToDOM(role, text, imagePreview, scrollToBottom = true, cus
 
   const contentWrap = document.createElement("div");
   contentWrap.className = "message-content";
-
-  if (imagePreview) {
-    const img = document.createElement("img");
-    img.src = imagePreview;
-    img.className = "message-image";
-    img.alt = "Uploaded image";
-    contentWrap.append(img);
-  }
 
   const textNode = document.createElement("div");
   textNode.textContent = text;
