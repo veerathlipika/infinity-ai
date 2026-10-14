@@ -55,6 +55,29 @@ function updateConnectionStatus() {
   }
 }
 
+// Custom Toast Notification System
+function showToastError(msg) {
+  let container = $("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+  
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = msg;
+  container.appendChild(toast);
+  
+  // Remove toast from DOM after animation completes
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 4000);
+}
+
 function setupEventListeners() {
   const openSettings = () => {
     $("settingsModal").hidden = false;
@@ -195,7 +218,7 @@ function setupEventListeners() {
 
     const file = imageItem.getAsFile();
     if (!file) {
-      alert("Could not read the copied image. Please try again.");
+      showToastError("Could not read the copied image. Please try again.");
       return;
     }
 
@@ -223,7 +246,7 @@ function setupEventListeners() {
     if (!text && !state.image) return;
 
     if (!state.apiKey) {
-      alert("Please connect your Gemini API key in settings first.");
+      showToastError("Please connect your Gemini API key in settings first.");
       openSettings();
       return;
     }
@@ -247,7 +270,7 @@ function adjustTextareaRows() {
 
 async function handleImageFile(file) {
   if (file.size > 12 * 1024 * 1024) {
-    alert("The image is larger than 12 MB. Please choose a smaller image.");
+    showToastError("The image is larger than 12 MB. Please choose a smaller image.");
     return;
   }
 
@@ -262,7 +285,7 @@ async function handleImageFile(file) {
     renderImagePreview();
   } catch (error) {
     console.error("Image loading failed:", error);
-    alert("Could not load image attachment.");
+    showToastError("Could not load image attachment.");
   }
 }
 
@@ -457,8 +480,9 @@ async function submitUserMessage(text, imageObj) {
     const candidate = data.candidates?.[0];
     const replyText = candidate?.content?.parts?.[0]?.text || "No response received from model.";
 
+    // Success: Update the temporary message text
     assistantMsgContentEl.textContent = replyText;
-    assistantMsgContentEl.classList.remove("typing", "error-message");
+    assistantMsgContentEl.classList.remove("typing");
 
     session.messages.push({
       role: "assistant",
@@ -469,16 +493,21 @@ async function submitUserMessage(text, imageObj) {
     saveSessionsToStorage();
 
   } catch (err) {
-    if (err.name === "AbortError") {
-      assistantMsgContentEl.textContent = "Generation cancelled.";
-      assistantMsgContentEl.classList.remove("typing");
-      assistantMsgContentEl.classList.add("error-message");
-    } else {
-      console.error("Gemini API Error:", err);
-      assistantMsgContentEl.textContent = `Error: ${err.message}`;
-      assistantMsgContentEl.classList.remove("typing");
-      assistantMsgContentEl.classList.add("error-message");
+    // ERROR HANDLING: Remove the entire "Thinking..." message block from the chat completely
+    const assistantMessageBlock = document.getElementById(assistantMsgId);
+    if (assistantMessageBlock) {
+      assistantMessageBlock.remove();
     }
+
+    // Determine error text
+    let errorText = err.message;
+    if (err.name === "AbortError") {
+      errorText = "Generation cancelled by user.";
+    }
+
+    // Show floating UI toast instead of ruining chat history
+    showToastError(errorText);
+
   } finally {
     setBusyState(false);
     state.activeController = null;
@@ -510,11 +539,12 @@ function buildApiPayload(session) {
 
 function getHttpErrorMessage(status) {
   switch (status) {
-    case 400: return "Bad Request (400). Check your query or model configuration.";
-    case 401: return "Unauthorized (401). Your API key is invalid or expired.";
-    case 403: return "Forbidden (403). Check API key permissions and billing.";
-    case 404: return "Model not found (404). Selected model is unavailable.";
-    case 429: return "Rate limit or Quota exceeded (429). Free tier limit reached. Please wait a moment or try switching to another model in settings.";
+    case 400: return "Bad Request (400). Please check your input.";
+    case 401: return "Unauthorized (401). Invalid API key.";
+    case 403: return "Forbidden (403). Check API permissions.";
+    case 404: return "Model not found. Change your model in settings.";
+    case 429: return "Rate limit exceeded. Please wait 1 minute.";
+    case 503: return "Model is experiencing high demand. Please try again later.";
     default: return `Server error (HTTP ${status}).`;
   }
 }
@@ -539,6 +569,8 @@ function appendMessageToDOM(role, text, imagePreview, scrollToBottom = true, cus
 
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${role}`;
+  
+  // Custom ID needs to be on the outer div so we can remove the entire block safely on error
   if (customId) messageDiv.id = customId;
 
   const avatar = document.createElement("div");
