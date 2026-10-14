@@ -20,9 +20,14 @@
         </div>
       </div>
 
-      <button class="new-chat" id="newChat"><span>＋</span> New chat</button>
+      <button class="new-chat" id="newChat">
+        <span>＋</span> New chat
+      </button>
+
       <div class="side-label">YOUR SPACE</div>
-      <button class="side-link active"><span>◷</span> Current conversation</button>
+      <button class="side-link active">
+        <span>◷</span> Current conversation
+      </button>
 
       <div class="sidebar-bottom">
         <div class="provider-card">
@@ -33,15 +38,25 @@
           </div>
           <span class="status-dot" id="statusDot"></span>
         </div>
-        <button class="settings-link" id="openSettings"><span>⚙</span> AI provider settings</button>
-        <div class="sidebar-note">Your conversation is kept in this browser session. Keep your API key private.</div>
+
+        <button class="settings-link" id="openSettings">
+          <span>⚙</span> AI provider settings
+        </button>
+
+        <div class="sidebar-note">
+          Your conversation is kept in this browser session. Keep your API key private.
+        </div>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
-        <div class="top-title">Chat <span class="tiny-chevron">⌄</span></div>
+
+        <div class="top-title">
+          Chat <span class="tiny-chevron">⌄</span>
+        </div>
+
         <button class="top-settings" id="openSettingsTop">
           <span class="green-dot"></span>
           <span id="topProviderLabel">Connect Gemini</span>
@@ -53,43 +68,87 @@
         <div class="welcome" id="welcome">
           <div class="welcome-symbol">∞</div>
           <p class="eyebrow">YOUR PERSONAL AI ASSISTANT</p>
-          <h1>What can I help<br class="mobile-break" /> you with?</h1>
-          <p class="welcome-subtitle">Your ideas, questions, and images — all in one focused AI workspace.</p>
+
+          <h1>
+            What can I help<br class="mobile-break" /> you with?
+          </h1>
+
+          <p class="welcome-subtitle">
+            Your ideas, questions, and images — all in one focused AI workspace.
+          </p>
+
           <div class="suggestions">
             <button class="suggestion" data-prompt="Explain a difficult topic in simple terms.">
               <span>✧</span>
-              <div><strong>Learn something</strong><small>Explain a topic simply</small></div>
+              <div>
+                <strong>Learn something</strong>
+                <small>Explain a topic simply</small>
+              </div>
               <b>↗</b>
             </button>
+
             <button class="suggestion" data-prompt="Help me brainstorm creative project ideas for a college student.">
               <span>✎</span>
-              <div><strong>Brainstorm ideas</strong><small>Explore new possibilities</small></div>
+              <div>
+                <strong>Brainstorm ideas</strong>
+                <small>Explore new possibilities</small>
+              </div>
               <b>↗</b>
             </button>
+
             <button class="suggestion" data-prompt="Help me write clean, beginner-friendly code and explain how it works.">
               <span>⌘</span>
-              <div><strong>Write some code</strong><small>Build and debug with me</small></div>
+              <div>
+                <strong>Write some code</strong>
+                <small>Build and debug with me</small>
+              </div>
               <b>↗</b>
             </button>
+
             <button class="suggestion" data-prompt="Give me a practical step-by-step plan to learn a new skill.">
               <span>◫</span>
-              <div><strong>Make a plan</strong><small>Turn goals into steps</small></div>
+              <div>
+                <strong>Make a plan</strong>
+                <small>Turn goals into steps</small>
+              </div>
               <b>↗</b>
             </button>
           </div>
         </div>
+
         <div class="messages" id="messages" aria-live="polite"></div>
       </section>
 
       <footer class="composer-area">
         <div class="composer-wrap">
           <div class="attachment-preview" id="attachmentPreview" hidden></div>
+
           <form id="chatForm" class="composer">
             <input type="file" id="imageInput" accept="image/*" hidden />
-            <button type="button" class="attach-btn" id="attachButton" aria-label="Attach image" title="Attach an image">＋</button>
-            <textarea id="promptInput" rows="1" placeholder="Ask Infinity AI anything..." aria-label="Message Infinity AI"></textarea>
-            <button type="submit" class="send-btn" id="sendButton" aria-label="Send message"><span>↑</span></button>
+
+            <button
+              type="button"
+              class="attach-btn"
+              id="attachButton"
+              aria-label="Attach image"
+              title="Attach an image"
+            >＋</button>
+
+            <textarea
+              id="promptInput"
+              rows="1"
+              placeholder="Ask Infinity AI anything..."
+              aria-label="Message Infinity AI"
+            ></textarea>
+
+            <button
+              type="submit"
+              class="send-btn"
+              id="sendButton"
+              aria-label="Send message"
+            ><span>↑</span></button>
           </form>
+
           <div class="composer-meta">
             <span><span class="mini-spark">✦</span> Powered by your chosen AI provider</span>
             <span>AI can make mistakes. Verify important information.</span>
@@ -100,37 +159,70 @@
   </div>
 
   <div class="modal-backdrop" id="settingsModal" hidden>
-    <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <section
+      class="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsTitle"
+    >
       <button class="modal-close" id="closeSettings" aria-label="Close settings">×</button>
+
       <div class="modal-icon">✦</div>
       <p class="eyebrow">PROVIDER CONFIGURATION</p>
       <h2 id="settingsTitle">Connect your AI</h2>
-      <p class="modal-description">Add your Google Gemini API key to enable chat and image questions in this browser.</p>
+
+      <p class="modal-description">
+        Add your Google Gemini API key to enable chat and image questions in this browser.
+      </p>
 
       <label for="apiKey">Gemini API key</label>
+
       <div class="key-input-wrap">
-        <input id="apiKey" type="password" autocomplete="off" placeholder="Paste your Gemini API key" />
+        <input
+          id="apiKey"
+          type="password"
+          autocomplete="off"
+          placeholder="Paste your Gemini API key"
+        />
         <button type="button" id="toggleKey">Show</button>
       </div>
 
       <label for="modelSelect">Gemini model</label>
+
       <select id="modelSelect">
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-        <option value="gemini-2.0-flash">Gemini 2.0 Flash (if available to your key)</option>
+        <option value="gemini-3.8-flash">Gemini 3.8 Flash (Recommended)</option>
+        <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+        <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option>
       </select>
 
       <div class="security-note">
         <span>ⓘ</span>
-        <p><strong>Important:</strong> this is a frontend-only demo. The key is saved in this browser's local storage and sent from your browser to Google. Don't use this setup for a public production app or share this folder with your key in it.</p>
+        <p>
+          <strong>Important:</strong> this is a frontend-only demo.
+          The key is saved in this browser's local storage and sent from
+          your browser to Google. Don't use this setup for a public
+          production app or share this folder with your key in it.
+        </p>
       </div>
 
       <div class="modal-actions">
-        <button class="button-quiet" id="disconnectKey" type="button">Remove key</button>
-        <button class="button-primary" id="saveSettings" type="button">Save connection</button>
+        <button class="button-quiet" id="disconnectKey" type="button">
+          Remove key
+        </button>
+        <button class="button-primary" id="saveSettings" type="button">
+          Save connection
+        </button>
       </div>
 
-      <p class="modal-footnote">Get a key in <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio ↗</a></p>
+      <p class="modal-footnote">
+        Get a key in
+        <a
+          href="https://aistudio.google.com/app/apikey"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Google AI Studio ↗</a>
+      </p>
+
       <p class="settings-message" id="settingsMessage" role="status"></p>
     </section>
   </div>
