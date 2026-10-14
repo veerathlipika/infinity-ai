@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 const state = {
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-2.5-flash",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-3.8-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false,
@@ -17,7 +17,6 @@ const state = {
   activeController: null
 };
 
-// Helper selector
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -57,7 +56,6 @@ function updateConnectionStatus() {
 }
 
 function setupEventListeners() {
-  // Navigation & Modals
   const openSettings = () => {
     $("settingsModal").hidden = false;
     $("settingsModal").style.display = "grid";
@@ -83,7 +81,6 @@ function setupEventListeners() {
     }
   });
 
-  // Mobile Menu
   const mobileMenu = $("mobileMenu");
   const sidebar = $("sidebar");
   if (mobileMenu) {
@@ -92,7 +89,6 @@ function setupEventListeners() {
     });
   }
 
-  // API Key Visibility Toggle
   $("toggleKey").addEventListener("click", () => {
     const keyInput = $("apiKey");
     if (keyInput.type === "password") {
@@ -104,7 +100,6 @@ function setupEventListeners() {
     }
   });
 
-  // Save Settings
   $("saveSettings").addEventListener("click", async () => {
     const key = $("apiKey").value.trim();
     const model = $("modelSelect").value;
@@ -120,7 +115,6 @@ function setupEventListeners() {
     msg.textContent = "Verifying connection...";
 
     try {
-      // Test API key validity with a lightweight model call
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,7 +140,6 @@ function setupEventListeners() {
     }
   });
 
-  // Disconnect Key
   $("disconnectKey").addEventListener("click", () => {
     state.apiKey = "";
     localStorage.removeItem(STORAGE_KEYS.API_KEY);
@@ -156,7 +149,6 @@ function setupEventListeners() {
     $("settingsMessage").textContent = "API key removed from browser.";
   });
 
-  // New Chat Button
   $("newChat").addEventListener("click", () => {
     createNewSession();
     if (window.innerWidth <= 760) {
@@ -164,7 +156,6 @@ function setupEventListeners() {
     }
   });
 
-  // Suggestion Cards
   document.querySelectorAll(".suggestion").forEach((btn) => {
     btn.addEventListener("click", () => {
       const promptText = btn.getAttribute("data-prompt");
@@ -176,7 +167,6 @@ function setupEventListeners() {
     });
   });
 
-  // Image Upload Handling (+ Button)
   const imageInput = $("imageInput");
   $("attachButton").addEventListener("click", () => {
     if (state.busy) return;
@@ -190,7 +180,6 @@ function setupEventListeners() {
     imageInput.value = "";
   });
 
-  // Paste Screenshot Handling (Ctrl + V)
   const promptInput = $("promptInput");
   promptInput.addEventListener("paste", async (event) => {
     if (state.busy) return;
@@ -200,7 +189,7 @@ function setupEventListeners() {
       item.kind === "file" && item.type.startsWith("image/")
     );
 
-    if (!imageItem) return; // Allow ordinary text pasting
+    if (!imageItem) return;
 
     event.preventDefault();
 
@@ -213,7 +202,6 @@ function setupEventListeners() {
     await handleImageFile(file);
   });
 
-  // Auto-resize textarea & Keyboard submission
   promptInput.addEventListener("input", adjustTextareaRows);
   promptInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -222,7 +210,6 @@ function setupEventListeners() {
     }
   });
 
-  // Form Submit
   $("chatForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (state.busy) {
@@ -324,7 +311,6 @@ function clearImage() {
   if (imageInput) imageInput.value = "";
 }
 
-// Session & Chat History Management
 function createNewSession() {
   const newSession = {
     id: `session_${Date.now()}`,
@@ -424,7 +410,6 @@ function loadCurrentSession() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Messaging and Gemini API Integration
 async function submitUserMessage(text, imageObj) {
   const session = getCurrentSession();
   if (session.messages.length === 0) {
@@ -529,7 +514,7 @@ function getHttpErrorMessage(status) {
     case 401: return "Unauthorized (401). Your API key is invalid or expired.";
     case 403: return "Forbidden (403). Check API key permissions and billing.";
     case 404: return "Model not found (404). Selected model is unavailable.";
-    case 429: return "Rate limit exceeded (429). Please wait and try again.";
+    case 429: return "Rate limit or Quota exceeded (429). Free tier limit reached. Please wait a moment or try switching to another model in settings.";
     default: return `Server error (HTTP ${status}).`;
   }
 }
