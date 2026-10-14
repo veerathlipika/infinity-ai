@@ -10,7 +10,7 @@ const STORAGE_KEYS = {
 
 const PROVIDER_MODELS = {
   gemini: [
-    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / High Capacity)" },
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / Ultra Stable)" },
     { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
     { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }
   ],
@@ -23,7 +23,7 @@ const PROVIDER_MODELS = {
 const state = {
   provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "gemini",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  // Default to gemini-1.5-flash to avoid initial 10-hour rate locks
+  // Enforce gemini-1.5-flash as default to prevent 10-hour model locks
   model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-1.5-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
@@ -35,7 +35,7 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Auto-migrate if stored model is the locked gemini-3.8-flash
+  // Always migrate away from locked gemini-3.8-flash on load
   if (state.model === "gemini-3.8-flash") {
     state.model = "gemini-1.5-flash";
     localStorage.setItem(STORAGE_KEYS.MODEL, "gemini-1.5-flash");
@@ -97,25 +97,6 @@ function updateConnectionStatus() {
   }
 }
 
-// Clean technical API trace errors into short, clean messages
-function cleanErrorMessage(rawMsg, status) {
-  const lowerMsg = (rawMsg || "").toLowerCase();
-
-  if (status === 429 || lowerMsg.includes("quota") || lowerMsg.includes("rate_limit")) {
-    return "Quota limit reached for this model. Please switch to Gemini 1.5 Flash in settings.";
-  }
-  if (status === 503 || lowerMsg.includes("demand") || lowerMsg.includes("overloaded")) {
-    return "Model is currently overloaded. Please switch to Gemini 1.5 Flash in settings.";
-  }
-  if (status === 401 || status === 403 || lowerMsg.includes("key") || lowerMsg.includes("unauthorized")) {
-    return "Invalid or unauthorized API key. Check settings.";
-  }
-  if (status === 404) {
-    return "Selected model not found. Try Gemini 1.5 Flash in settings.";
-  }
-  return "Connection issue. Please try switching to Gemini 1.5 Flash in settings.";
-}
-
 function showToastError(msg) {
   let container = $("toastContainer");
   if (!container) {
@@ -125,7 +106,6 @@ function showToastError(msg) {
     document.body.appendChild(container);
   }
   
-  // Clear any old toasts to keep screen clean
   container.replaceChildren();
 
   const toast = document.createElement("div");
@@ -216,13 +196,12 @@ function setupEventListeners() {
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           const rawMessage = errData.error?.message || "";
-          // Do not block saving if server is merely overloaded or rate limited
           if (res.status === 503 || res.status === 429 || rawMessage.includes("quota")) {
             saveStateAndClose(provider, key, model, "Key saved! (Recommendation: Use Gemini 1.5 Flash)");
             return;
           }
           if (res.status === 400 || res.status === 401 || res.status === 403) {
-            throw new Error("Invalid API key or unauthorized access.");
+            throw new Error("Invalid API key.");
           }
         }
       } else if (provider === "groq") {
@@ -541,6 +520,7 @@ function loadCurrentSession() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
+// SILENT AUTOMATIC FALLBACK ENGINE
 async function submitUserMessage(text, imageObj) {
   const session = getCurrentSession();
   if (session.messages.length === 0) {
@@ -592,31 +572,50 @@ async function submitUserMessage(text, imageObj) {
       });
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        const cleanedMsg = cleanErrorMessage(errJson.error?.message, res.status);
-        throw new Error(cleanedMsg);
+        throw new Error("Groq API error. Check your Groq API key.");
       }
 
       const data = await res.json();
       replyText = data.choices?.[0]?.message?.content || "No response received.";
     } else {
-      const apiContents = buildGeminiApiPayload(session);
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: apiContents }),
-        signal: state.activeController.signal
-      });
+      // SILENT FALLBACK QUEUE FOR GEMINI
+      const modelQueue = [...new Set([state.model, "gemini-1.5-flash", "gemini-3.6-flash"])];
+      let success = false;
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        const cleanedMsg = cleanErrorMessage(errJson.error?.message, res.status);
-        throw new Error(cleanedMsg);
+      for (const modelCandidate of modelQueue) {
+        try {
+          const apiContents = buildGeminiApiPayload(session);
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelCandidate}:generateContent?key=${state.apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: apiContents }),
+            signal: state.activeController.signal
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textResult) {
+              replyText = textResult;
+              success = true;
+
+              // If fallback was used, update app state silently so status pill updates
+              if (modelCandidate !== state.model) {
+                state.model = modelCandidate;
+                localStorage.setItem(STORAGE_KEYS.MODEL, modelCandidate);
+                updateConnectionStatus();
+              }
+              break;
+            }
+          }
+        } catch (err) {
+          if (err.name === "AbortError") throw err; // User clicked stop
+        }
       }
 
-      const data = await res.json();
-      const candidate = data.candidates?.[0];
-      replyText = candidate?.content?.parts?.[0]?.text || "No response received.";
+      if (!success) {
+        throw new Error("Unable to connect to Gemini. Please check your API key in settings.");
+      }
     }
 
     assistantMsgContentEl.textContent = replyText;
