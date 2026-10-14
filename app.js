@@ -1,15 +1,29 @@
 // Infinity AI Application Logic
 
 const STORAGE_KEYS = {
-  API_KEY: "infinity_ai_gemini_key",
+  PROVIDER: "infinity_ai_provider",
+  API_KEY: "infinity_ai_key",
   MODEL: "infinity_ai_model",
   SESSIONS: "infinity_ai_sessions",
   CURRENT_ID: "infinity_ai_current_id"
 };
 
+const PROVIDER_MODELS = {
+  gemini: [
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / Most Stable)" },
+    { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
+    { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }
+  ],
+  groq: [
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Fast Free Backup)" },
+    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" }
+  ]
+};
+
 const state = {
+  provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "gemini",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-3.8-flash",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-1.5-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false,
@@ -26,10 +40,31 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initUI() {
+  $("providerSelect").value = state.provider;
+  populateModels(state.provider);
   $("apiKey").value = state.apiKey;
   $("modelSelect").value = state.model;
   updateConnectionStatus();
   renderHistoryList();
+}
+
+function populateModels(provider) {
+  const select = $("modelSelect");
+  select.replaceChildren();
+  const models = PROVIDER_MODELS[provider] || PROVIDER_MODELS.gemini;
+  models.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.value;
+    opt.textContent = m.label;
+    select.appendChild(opt);
+  });
+  
+  const footnote = $("keyLinkFootnote");
+  if (provider === "groq") {
+    footnote.innerHTML = `Get a free key in <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Groq Console ↗</a>`;
+  } else {
+    footnote.innerHTML = `Get a free key in <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio ↗</a>`;
+  }
 }
 
 function updateConnectionStatus() {
@@ -41,21 +76,20 @@ function updateConnectionStatus() {
   const topProviderLabel = $("topProviderLabel");
 
   if (connected) {
-    providerStatus.textContent = "Gemini Connected";
+    providerStatus.textContent = state.provider === "groq" ? "Groq Connected" : "Gemini Connected";
     modelStatus.textContent = state.model;
     statusDot.classList.add("connected");
     topStatusDot.classList.add("connected");
     topProviderLabel.textContent = state.model;
   } else {
     providerStatus.textContent = "AI not connected";
-    modelStatus.textContent = "Add your Gemini API key";
+    modelStatus.textContent = "Add your API key";
     statusDot.classList.remove("connected");
     topStatusDot.classList.remove("connected");
-    topProviderLabel.textContent = "Connect Gemini";
+    topProviderLabel.textContent = "Connect AI";
   }
 }
 
-// Custom Toast Notification System
 function showToastError(msg) {
   let container = $("toastContainer");
   if (!container) {
@@ -70,7 +104,6 @@ function showToastError(msg) {
   toast.textContent = msg;
   container.appendChild(toast);
   
-  // Remove toast from DOM after animation completes
   setTimeout(() => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
@@ -104,6 +137,11 @@ function setupEventListeners() {
     }
   });
 
+  $("providerSelect").addEventListener("change", (e) => {
+    const selectedProvider = e.target.value;
+    populateModels(selectedProvider);
+  });
+
   const mobileMenu = $("mobileMenu");
   const sidebar = $("sidebar");
   if (mobileMenu) {
@@ -124,6 +162,7 @@ function setupEventListeners() {
   });
 
   $("saveSettings").addEventListener("click", async () => {
+    const provider = $("providerSelect").value;
     const key = $("apiKey").value.trim();
     const model = $("modelSelect").value;
     const msg = $("settingsMessage");
@@ -135,33 +174,75 @@ function setupEventListeners() {
     }
 
     msg.style.color = "#83e3b4";
-    msg.textContent = "Verifying connection...";
+    msg.textContent = "Saving and verifying connection...";
 
+    // Perform non-blocking test call
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: "Ping" }] }] })
-      });
+      if (provider === "gemini") {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: "Ping" }] }] })
+        });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `HTTP error ${res.status}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          // DO NOT block saving if server is merely busy (503/429)
+          if (res.status === 503 || res.status === 429) {
+            saveStateAndClose(provider, key, model, "Key saved! (Model busy, but connection active)");
+            return;
+          }
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            throw new Error(errData.error?.message || "Invalid API Key");
+          }
+        }
+      } else if (provider === "groq") {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: "Ping" }],
+            max_tokens: 5
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          if (res.status === 401 || res.status === 403) {
+            throw new Error(errData.error?.message || "Invalid Groq API Key");
+          }
+        }
       }
 
-      state.apiKey = key;
-      state.model = model;
-      localStorage.setItem(STORAGE_KEYS.API_KEY, key);
-      localStorage.setItem(STORAGE_KEYS.MODEL, model);
-
-      updateConnectionStatus();
-      msg.textContent = "Successfully connected to Gemini!";
-      setTimeout(() => closeSettings(), 1200);
+      saveStateAndClose(provider, key, model, "Successfully connected!");
     } catch (err) {
       msg.style.color = "#ffaaa5";
-      msg.textContent = `Connection failed: ${err.message}`;
+      msg.textContent = `Connection error: ${err.message}`;
     }
   });
+
+  function saveStateAndClose(provider, key, model, messageText) {
+    state.provider = provider;
+    state.apiKey = key;
+    state.model = model;
+    localStorage.setItem(STORAGE_KEYS.PROVIDER, provider);
+    localStorage.setItem(STORAGE_KEYS.API_KEY, key);
+    localStorage.setItem(STORAGE_KEYS.MODEL, model);
+
+    updateConnectionStatus();
+    const msg = $("settingsMessage");
+    msg.style.color = "#83e3b4";
+    msg.textContent = messageText;
+    setTimeout(() => {
+      $("settingsModal").hidden = true;
+      $("settingsModal").style.display = "none";
+      msg.textContent = "";
+    }, 1200);
+  }
 
   $("disconnectKey").addEventListener("click", () => {
     state.apiKey = "";
@@ -169,7 +250,7 @@ function setupEventListeners() {
     $("apiKey").value = "";
     updateConnectionStatus();
     $("settingsMessage").style.color = "#83e3b4";
-    $("settingsMessage").textContent = "API key removed from browser.";
+    $("settingsMessage").textContent = "API key removed.";
   });
 
   $("newChat").addEventListener("click", () => {
@@ -218,7 +299,7 @@ function setupEventListeners() {
 
     const file = imageItem.getAsFile();
     if (!file) {
-      showToastError("Could not read the copied image. Please try again.");
+      showToastError("Could not read copied image.");
       return;
     }
 
@@ -246,7 +327,7 @@ function setupEventListeners() {
     if (!text && !state.image) return;
 
     if (!state.apiKey) {
-      showToastError("Please connect your Gemini API key in settings first.");
+      showToastError("Please connect your API key in settings first.");
       openSettings();
       return;
     }
@@ -270,7 +351,7 @@ function adjustTextareaRows() {
 
 async function handleImageFile(file) {
   if (file.size > 12 * 1024 * 1024) {
-    showToastError("The image is larger than 12 MB. Please choose a smaller image.");
+    showToastError("Image must be smaller than 12 MB.");
     return;
   }
 
@@ -284,8 +365,7 @@ async function handleImageFile(file) {
     };
     renderImagePreview();
   } catch (error) {
-    console.error("Image loading failed:", error);
-    showToastError("Could not load image attachment.");
+    showToastError("Could not load image.");
   }
 }
 
@@ -462,25 +542,54 @@ async function submitUserMessage(text, imageObj) {
   state.activeController = new AbortController();
 
   try {
-    const apiContents = buildApiPayload(session);
+    let replyText = "";
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: apiContents }),
-      signal: state.activeController.signal
-    });
+    if (state.provider === "groq") {
+      const groqMessages = session.messages.map(m => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.text
+      }));
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || getHttpErrorMessage(res.status));
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${state.apiKey}`
+        },
+        body: JSON.stringify({
+          model: state.model,
+          messages: groqMessages
+        }),
+        signal: state.activeController.signal
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      replyText = data.choices?.[0]?.message?.content || "No response received.";
+    } else {
+      // Default: Google Gemini
+      const apiContents = buildGeminiApiPayload(session);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: apiContents }),
+        signal: state.activeController.signal
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || getHttpErrorMessage(res.status));
+      }
+
+      const data = await res.json();
+      const candidate = data.candidates?.[0];
+      replyText = candidate?.content?.parts?.[0]?.text || "No response received.";
     }
 
-    const data = await res.json();
-    const candidate = data.candidates?.[0];
-    const replyText = candidate?.content?.parts?.[0]?.text || "No response received from model.";
-
-    // Success: Update the temporary message text
     assistantMsgContentEl.textContent = replyText;
     assistantMsgContentEl.classList.remove("typing");
 
@@ -493,21 +602,17 @@ async function submitUserMessage(text, imageObj) {
     saveSessionsToStorage();
 
   } catch (err) {
-    // ERROR HANDLING: Remove the entire "Thinking..." message block from the chat completely
     const assistantMessageBlock = document.getElementById(assistantMsgId);
     if (assistantMessageBlock) {
       assistantMessageBlock.remove();
     }
 
-    // Determine error text
     let errorText = err.message;
     if (err.name === "AbortError") {
-      errorText = "Generation cancelled by user.";
+      errorText = "Generation cancelled.";
     }
 
-    // Show floating UI toast instead of ruining chat history
     showToastError(errorText);
-
   } finally {
     setBusyState(false);
     state.activeController = null;
@@ -516,7 +621,7 @@ async function submitUserMessage(text, imageObj) {
   }
 }
 
-function buildApiPayload(session) {
+function buildGeminiApiPayload(session) {
   return session.messages.map(m => {
     const parts = [];
     if (m.text) {
@@ -539,12 +644,12 @@ function buildApiPayload(session) {
 
 function getHttpErrorMessage(status) {
   switch (status) {
-    case 400: return "Bad Request (400). Please check your input.";
+    case 400: return "Bad Request (400). Please check your prompt.";
     case 401: return "Unauthorized (401). Invalid API key.";
-    case 403: return "Forbidden (403). Check API permissions.";
-    case 404: return "Model not found. Change your model in settings.";
-    case 429: return "Rate limit exceeded. Please wait 1 minute.";
-    case 503: return "Model is experiencing high demand. Please try again later.";
+    case 403: return "Forbidden (403). Check API key permissions.";
+    case 404: return "Model not found. Try Gemini 1.5 Flash in settings.";
+    case 429: return "Rate limit hit. Wait 1 minute or switch provider.";
+    case 503: return "Server overloaded. Try Gemini 1.5 Flash in settings.";
     default: return `Server error (HTTP ${status}).`;
   }
 }
@@ -569,8 +674,6 @@ function appendMessageToDOM(role, text, imagePreview, scrollToBottom = true, cus
 
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${role}`;
-  
-  // Custom ID needs to be on the outer div so we can remove the entire block safely on error
   if (customId) messageDiv.id = customId;
 
   const avatar = document.createElement("div");
