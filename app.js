@@ -20,6 +20,14 @@ const PROVIDER_MODELS = {
   ]
 };
 
+// FORCE MIGRATION: Clear broken legacy models directly from browser storage
+(function forceStorageCleanup() {
+  const currentSavedModel = localStorage.getItem(STORAGE_KEYS.MODEL);
+  if (!currentSavedModel || currentSavedModel === "llama-3.3-70b-versatile" || currentSavedModel === "gemini-3.8-flash") {
+    localStorage.setItem(STORAGE_KEYS.MODEL, "llama-3.3-70b-specdec");
+  }
+})();
+
 const state = {
   provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "groq",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
@@ -32,12 +40,6 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Migrate away from invalid model ID
-  if (state.model === "llama-3.3-70b-versatile") {
-    state.model = "llama-3.3-70b-specdec";
-    localStorage.setItem(STORAGE_KEYS.MODEL, "llama-3.3-70b-specdec");
-  }
-
   initUI();
   setupEventListeners();
   loadCurrentSession();
