@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#090b14">
   <meta name="description" content="Infinity AI personal chat assistant">
   <title>Infinity AI — Your AI Workspace</title>
-  <link rel="stylesheet" href="./styles.css?v=15">
+  <link rel="stylesheet" href="./styles.css?v=12">
 </head>
 <body>
   <div class="app-shell">
@@ -28,7 +28,7 @@
           <div class="provider-icon">✦</div>
           <div class="provider-copy">
             <strong id="providerStatus">AI not connected</strong>
-            <small id="modelStatus">Add your API key</small>
+            <small id="modelStatus">Add your Gemini API key</small>
           </div>
           <span class="status-dot" id="statusDot"></span>
         </div>
@@ -53,7 +53,7 @@
 
         <button type="button" class="top-settings" id="openSettingsTop">
           <span class="green-dot" id="topStatusDot"></span>
-          <span id="topProviderLabel">Connect AI</span>
+          <span id="topProviderLabel">Connect Gemini</span>
           <span>⚙</span>
         </button>
       </header>
@@ -139,30 +139,28 @@
       <p class="eyebrow">PROVIDER CONFIGURATION</p>
       <h2 id="settingsTitle">Connect your AI</h2>
       <p class="modal-description">
-        Add your Google Gemini API key or Groq API key to enable chat.
+        Add your Google Gemini API key to enable chat and image questions.
       </p>
 
-      <label for="providerSelect">AI Provider</label>
-      <select id="providerSelect">
-        <option value="gemini">Google Gemini AI</option>
-        <option value="groq">Groq Cloud AI (Free Backup Provider)</option>
-      </select>
-
-      <label for="apiKey">API Key</label>
+      <label for="apiKey">Gemini API key</label>
       <div class="key-input-wrap">
         <input id="apiKey" type="password" autocomplete="off"
-          placeholder="Paste your API key here">
+          placeholder="Paste your Gemini API key">
         <button type="button" id="toggleKey">Show</button>
       </div>
 
-      <label for="modelSelect">AI Model</label>
+      <label for="modelSelect">Gemini model</label>
       <select id="modelSelect">
-        <!-- Dynamically populated -->
+        <option value="gemini-1.5-flash">Gemini 1.5 Flash (High Capacity & Stable)</option>
+        <option value="gemini-3.8-flash">Gemini 3.8 Flash</option>
+        <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
       </select>
 
       <div class="security-note">
         <span>ⓘ</span>
-        <p><strong>Important:</strong> Keys are stored in your browser session. Never share or commit your keys to GitHub.</p>
+        <p><strong>Important:</strong> this demo stores the API key in this
+          browser. Never commit your key to GitHub. A public production app
+          should use a secure backend.</p>
       </div>
 
       <div class="modal-actions">
@@ -174,13 +172,15 @@
         </button>
       </div>
 
-      <p class="modal-footnote" id="keyLinkFootnote">
-        Get a free key in <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio ↗</a>
+      <p class="modal-footnote">
+        Get a key in
+        <a href="https://aistudio.google.com/app/apikey"
+          target="_blank" rel="noopener noreferrer">Google AI Studio ↗</a>
       </p>
       <p class="settings-message" id="settingsMessage" role="status"></p>
     </section>
   </div>
 
-  <script src="./app.js?v=15" defer></script>
+  <script src="./app.js?v=12" defer></script>
 </body>
 </html>
