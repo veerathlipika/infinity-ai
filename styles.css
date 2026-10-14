@@ -897,7 +897,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin: 10px 0 0;
 }
 
-/* Toast Notifications */
+/* Toast Container (Hidden when empty) */
 .toast-container {
   position: fixed;
   bottom: 90px;
