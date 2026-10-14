@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 const state = {
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-3.8-flash",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-2.5-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false,
@@ -226,7 +226,6 @@ function setupEventListeners() {
   $("chatForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (state.busy) {
-      // If busy, act as Stop/Cancel button
       if (state.activeController) {
         state.activeController.abort();
       }
@@ -245,7 +244,6 @@ function setupEventListeners() {
     const currentMessageText = text;
     const currentImageObj = state.image;
 
-    // Reset composer state
     promptInput.value = "";
     adjustTextareaRows();
     clearImage();
@@ -449,7 +447,6 @@ async function submitUserMessage(text, imageObj) {
 
   appendMessageToDOM("user", userMsg.text, userMsg.imagePreview, true);
 
-  // Prepare Assistant placeholder & Loading state
   setBusyState(true);
   const assistantMsgId = `msg_${Date.now()}`;
   const assistantMsgContentEl = appendMessageToDOM("assistant", "Thinking...", null, true, assistantMsgId);
