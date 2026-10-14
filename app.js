@@ -9,30 +9,35 @@ const STORAGE_KEYS = {
 };
 
 const PROVIDER_MODELS = {
-  gemini: [
-    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended)" },
-    { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" }
-  ],
   groq: [
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Fast & Free)" },
+    { value: "llama-3.3-70b-specdec", label: "Llama 3.3 70B SpecDec (Recommended)" },
+    { value: "llama3-70b-8192", label: "Llama 3 70B (Fast Backup)" },
     { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" }
+  ],
+  gemini: [
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" }
   ]
 };
 
 const state = {
   provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "groq",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "llama-3.3-70b-versatile",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "llama-3.3-70b-specdec",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
-  busy: false,
-  image: null,
-  activeController: null
+  busy: false
 };
 
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Migrate away from invalid model ID
+  if (state.model === "llama-3.3-70b-versatile") {
+    state.model = "llama-3.3-70b-specdec";
+    localStorage.setItem(STORAGE_KEYS.MODEL, "llama-3.3-70b-specdec");
+  }
+
   initUI();
   setupEventListeners();
   loadCurrentSession();
@@ -156,7 +161,7 @@ function setupEventListeners() {
     }
   });
 
-  $("saveSettings").addEventListener("click", async () => {
+  $("saveSettings").addEventListener("click", () => {
     const provider = $("providerSelect").value;
     const key = $("apiKey").value.trim();
     const model = $("modelSelect").value;
@@ -364,7 +369,6 @@ async function submitUserMessage(text) {
     let replyText = "";
 
     if (state.provider === "groq") {
-      // Clean structure specifically for Groq API
       const groqFormattedMessages = session.messages.map(m => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.text || ""
@@ -390,7 +394,6 @@ async function submitUserMessage(text) {
       const data = await res.json();
       replyText = data.choices?.[0]?.message?.content || "No response received.";
     } else {
-      // Gemini Format
       const geminiContents = session.messages.map(m => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.text || "" }]
