@@ -900,36 +900,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* Toast Notifications */
 .toast-container {
   position: fixed;
-  bottom: 95px;
+  bottom: 90px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 10px;
   pointer-events: none;
+  width: min(500px, 92%);
 }
 
 .toast {
-  background: rgba(235, 87, 87, 0.95);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 170, 165, 0.3);
-  animation: toastFadeIn 0.3s ease, toastFadeOut 0.4s ease 3.5s forwards;
+  background: rgba(224, 72, 72, 0.95);
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 170, 165, 0.35);
+  animation: toastFadeIn 0.25s ease, toastFadeOut 0.35s ease 3.5s forwards;
 }
 
 @keyframes toastFadeIn {
-  from { opacity: 0; transform: translateY(15px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes toastFadeOut {
   from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-15px); }
+  to { opacity: 0; transform: translateY(-12px); }
 }
 
 @keyframes appear {
