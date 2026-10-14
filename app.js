@@ -10,7 +10,7 @@ const STORAGE_KEYS = {
 
 const PROVIDER_MODELS = {
   gemini: [
-    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / Most Stable)" },
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Recommended / High Capacity)" },
     { value: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
     { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }
   ],
@@ -23,6 +23,7 @@ const PROVIDER_MODELS = {
 const state = {
   provider: localStorage.getItem(STORAGE_KEYS.PROVIDER) || "gemini",
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
+  // Default to gemini-1.5-flash to avoid initial 10-hour rate locks
   model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-1.5-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
@@ -34,6 +35,12 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Auto-migrate if stored model is the locked gemini-3.8-flash
+  if (state.model === "gemini-3.8-flash") {
+    state.model = "gemini-1.5-flash";
+    localStorage.setItem(STORAGE_KEYS.MODEL, "gemini-1.5-flash");
+  }
+
   initUI();
   setupEventListeners();
   loadCurrentSession();
@@ -90,6 +97,25 @@ function updateConnectionStatus() {
   }
 }
 
+// Clean technical API trace errors into short, clean messages
+function cleanErrorMessage(rawMsg, status) {
+  const lowerMsg = (rawMsg || "").toLowerCase();
+
+  if (status === 429 || lowerMsg.includes("quota") || lowerMsg.includes("rate_limit")) {
+    return "Quota limit reached for this model. Please switch to Gemini 1.5 Flash in settings.";
+  }
+  if (status === 503 || lowerMsg.includes("demand") || lowerMsg.includes("overloaded")) {
+    return "Model is currently overloaded. Please switch to Gemini 1.5 Flash in settings.";
+  }
+  if (status === 401 || status === 403 || lowerMsg.includes("key") || lowerMsg.includes("unauthorized")) {
+    return "Invalid or unauthorized API key. Check settings.";
+  }
+  if (status === 404) {
+    return "Selected model not found. Try Gemini 1.5 Flash in settings.";
+  }
+  return "Connection issue. Please try switching to Gemini 1.5 Flash in settings.";
+}
+
 function showToastError(msg) {
   let container = $("toastContainer");
   if (!container) {
@@ -99,6 +125,9 @@ function showToastError(msg) {
     document.body.appendChild(container);
   }
   
+  // Clear any old toasts to keep screen clean
+  container.replaceChildren();
+
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.textContent = msg;
@@ -108,7 +137,7 @@ function showToastError(msg) {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
     }
-  }, 4000);
+  }, 3800);
 }
 
 function setupEventListeners() {
@@ -174,9 +203,8 @@ function setupEventListeners() {
     }
 
     msg.style.color = "#83e3b4";
-    msg.textContent = "Saving and verifying connection...";
+    msg.textContent = "Saving connection...";
 
-    // Perform non-blocking test call
     try {
       if (provider === "gemini") {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
@@ -187,13 +215,14 @@ function setupEventListeners() {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          // DO NOT block saving if server is merely busy (503/429)
-          if (res.status === 503 || res.status === 429) {
-            saveStateAndClose(provider, key, model, "Key saved! (Model busy, but connection active)");
+          const rawMessage = errData.error?.message || "";
+          // Do not block saving if server is merely overloaded or rate limited
+          if (res.status === 503 || res.status === 429 || rawMessage.includes("quota")) {
+            saveStateAndClose(provider, key, model, "Key saved! (Recommendation: Use Gemini 1.5 Flash)");
             return;
           }
           if (res.status === 400 || res.status === 401 || res.status === 403) {
-            throw new Error(errData.error?.message || "Invalid API Key");
+            throw new Error("Invalid API key or unauthorized access.");
           }
         }
       } else if (provider === "groq") {
@@ -211,9 +240,8 @@ function setupEventListeners() {
         });
 
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
           if (res.status === 401 || res.status === 403) {
-            throw new Error(errData.error?.message || "Invalid Groq API Key");
+            throw new Error("Invalid Groq API key.");
           }
         }
       }
@@ -565,13 +593,13 @@ async function submitUserMessage(text, imageObj) {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `HTTP ${res.status}`);
+        const cleanedMsg = cleanErrorMessage(errJson.error?.message, res.status);
+        throw new Error(cleanedMsg);
       }
 
       const data = await res.json();
       replyText = data.choices?.[0]?.message?.content || "No response received.";
     } else {
-      // Default: Google Gemini
       const apiContents = buildGeminiApiPayload(session);
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${state.model}:generateContent?key=${state.apiKey}`, {
         method: "POST",
@@ -582,7 +610,8 @@ async function submitUserMessage(text, imageObj) {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || getHttpErrorMessage(res.status));
+        const cleanedMsg = cleanErrorMessage(errJson.error?.message, res.status);
+        throw new Error(cleanedMsg);
       }
 
       const data = await res.json();
@@ -640,18 +669,6 @@ function buildGeminiApiPayload(session) {
       parts: parts
     };
   });
-}
-
-function getHttpErrorMessage(status) {
-  switch (status) {
-    case 400: return "Bad Request (400). Please check your prompt.";
-    case 401: return "Unauthorized (401). Invalid API key.";
-    case 403: return "Forbidden (403). Check API key permissions.";
-    case 404: return "Model not found. Try Gemini 1.5 Flash in settings.";
-    case 429: return "Rate limit hit. Wait 1 minute or switch provider.";
-    case 503: return "Server overloaded. Try Gemini 1.5 Flash in settings.";
-    default: return `Server error (HTTP ${status}).`;
-  }
 }
 
 function setBusyState(busy) {
