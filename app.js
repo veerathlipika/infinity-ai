@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 
 const state = {
   apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
-  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-2.5-flash",
+  model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-3.8-flash",
   sessions: JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || "[]"),
   currentSessionId: localStorage.getItem(STORAGE_KEYS.CURRENT_ID) || null,
   busy: false,
